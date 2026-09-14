@@ -2,6 +2,9 @@
 # SECCIÓN 1: DATOS COMPARTIDOS (Grafo y Heurística)
 # ==============================================================================
 
+ESTUDIANTE = "Johann Beskow 36923"
+CURSO = "Inteligencia Artificial"
+
 # Representamos el grafo dirigido mediante un diccionario.
 # La clave es el nodo origen, y el valor es una lista de tuplas (destino, costo).
 GRAFO = {
@@ -65,7 +68,19 @@ def formatear_frontera(frontera):
     """
     Función auxiliar para mostrar la frontera de forma legible en la traza.
     """
-    return [f"{n['estado']}(prio={n['prioridad']})" for n in frontera]
+    return [
+        f"{n['estado']}(g={n['g']},h={n['h']},f={n['f']},prio={n['prioridad']})"
+        for n in frontera
+    ]
+
+
+def extraer_mejor(frontera):
+    """Extrae el menor valor; ante empate conserva el orden FIFO de inserción."""
+    indice, nodo = min(
+        enumerate(frontera), key=lambda elemento: (elemento[1]["prioridad"], elemento[0])
+    )
+    frontera.pop(indice)
+    return nodo
 
 
 # ==============================================================================
@@ -87,6 +102,7 @@ def busqueda_ucs(inicio, objetivo):
     expandidos = 0
     max_frontera = 1
     reaperturas = 0
+    estados_expandidos = set()
     
     print("\n--- TRAZA UCS (Prioridad: g) ---")
     
@@ -94,9 +110,8 @@ def busqueda_ucs(inicio, objetivo):
         # Registrar tamaño máximo alcanzado por la frontera
         max_frontera = max(max_frontera, len(frontera))
         
-        # Extraer el nodo con menor prioridad (g). Si hay empate, Python extrae el primero (FIFO)
-        nodo = min(frontera, key=lambda n: n["prioridad"])
-        frontera.remove(nodo)
+        # Menor g; el desempate es FIFO.
+        nodo = extraer_mejor(frontera)
         
         estado = nodo["estado"]
         g = nodo["g"]
@@ -106,7 +121,10 @@ def busqueda_ucs(inicio, objetivo):
             print(f"Obsoleto descartado: {estado} con g={g} (mejor_g actual={mejor_g[estado]})")
             continue
             
-        print(f"Expandiendo: {estado} (g={g}) | Frontera: {formatear_frontera(frontera)}")
+        print(
+            f"Expandiendo: {estado} (g={g}, h={nodo['h']}, f={nodo['f']}, "
+            f"prio={nodo['prioridad']}) | Frontera: {formatear_frontera(frontera)}"
+        )
         
         # Prueba del objetivo AL EXTRAER
         if estado == objetivo:
@@ -120,6 +138,7 @@ def busqueda_ucs(inicio, objetivo):
             }
             
         expandidos += 1
+        estados_expandidos.add(estado)
         
         # Relajar cada transición legal
         for sucesor, costo in obtener_sucesores(estado):
@@ -127,8 +146,8 @@ def busqueda_ucs(inicio, objetivo):
             
             # Evaluar si descubrimos un camino mejor hacia el sucesor
             if sucesor not in mejor_g or nuevo_g < mejor_g[sucesor]:
-                if sucesor in mejor_g:
-                    reaperturas += 1  # Estado ya conocido que se reabre/mejora
+                if sucesor in estados_expandidos:
+                    reaperturas += 1  # Solo cuenta si ya había sido expandido.
                 
                 mejor_g[sucesor] = nuevo_g
                 h_sucesor = HEURISTICA[sucesor]
@@ -161,19 +180,26 @@ def busqueda_voraz(inicio, objetivo):
     expandidos = 0
     max_frontera = 1
     reaperturas = 0
+    estados_expandidos = set()
     
     print("\n--- TRAZA VORAZ (Prioridad: h) ---")
     
     while len(frontera) > 0:
         max_frontera = max(max_frontera, len(frontera))
-        nodo = min(frontera, key=lambda n: n["prioridad"])
-        frontera.remove(nodo)
+        nodo = extraer_mejor(frontera)
         
         estado = nodo["estado"]
         g = nodo["g"]
         h = nodo["h"]
+
+        if g > mejor_g[estado]:
+            print(f"Obsoleto descartado: {estado} con g={g} (mejor_g actual={mejor_g[estado]})")
+            continue
         
-        print(f"Expandiendo: {estado} (h={h}) | Frontera: {formatear_frontera(frontera)}")
+        print(
+            f"Expandiendo: {estado} (g={g}, h={h}, f={nodo['f']}, "
+            f"prio={nodo['prioridad']}) | Frontera: {formatear_frontera(frontera)}"
+        )
         
         if estado == objetivo:
             return {
@@ -186,11 +212,12 @@ def busqueda_voraz(inicio, objetivo):
             }
             
         expandidos += 1
+        estados_expandidos.add(estado)
         
         for sucesor, costo in obtener_sucesores(estado):
             nuevo_g = g + costo
             if sucesor not in mejor_g or nuevo_g < mejor_g[sucesor]:
-                if sucesor in mejor_g:
+                if sucesor in estados_expandidos:
                     reaperturas += 1
                 
                 mejor_g[sucesor] = nuevo_g
@@ -224,13 +251,13 @@ def busqueda_a_estrella(inicio, objetivo):
     expandidos = 0
     max_frontera = 1
     reaperturas = 0
+    estados_expandidos = set()
     
     print("\n--- TRAZA A* (Prioridad: g + h) ---")
     
     while len(frontera) > 0:
         max_frontera = max(max_frontera, len(frontera))
-        nodo = min(frontera, key=lambda n: n["prioridad"])
-        frontera.remove(nodo)
+        nodo = extraer_mejor(frontera)
         
         estado = nodo["estado"]
         g = nodo["g"]
@@ -240,7 +267,10 @@ def busqueda_a_estrella(inicio, objetivo):
             print(f"Obsoleto descartado: {estado} con g={g} (mejor_g actual={mejor_g[estado]})")
             continue
             
-        print(f"Expandiendo: {estado} (f={f}) | Frontera: {formatear_frontera(frontera)}")
+        print(
+            f"Expandiendo: {estado} (g={g}, h={nodo['h']}, f={f}, "
+            f"prio={nodo['prioridad']}) | Frontera: {formatear_frontera(frontera)}"
+        )
         
         if estado == objetivo:
             return {
@@ -253,11 +283,12 @@ def busqueda_a_estrella(inicio, objetivo):
             }
             
         expandidos += 1
+        estados_expandidos.add(estado)
         
         for sucesor, costo in obtener_sucesores(estado):
             nuevo_g = g + costo
             if sucesor not in mejor_g or nuevo_g < mejor_g[sucesor]:
-                if sucesor in mejor_g:
+                if sucesor in estados_expandidos:
                     reaperturas += 1
                 
                 mejor_g[sucesor] = nuevo_g
@@ -282,6 +313,8 @@ def busqueda_a_estrella(inicio, objetivo):
 # ==============================================================================
 
 # Ejecutamos los 3 algoritmos desde "S" hasta "G"
+print(f"Estudiante: {ESTUDIANTE}")
+print(f"Curso: {CURSO}")
 res_ucs = busqueda_ucs("S", "G")
 res_voraz = busqueda_voraz("S", "G")
 res_a_star = busqueda_a_estrella("S", "G")
@@ -300,3 +333,30 @@ print(f"{'Estados Generados':<22} | {res_ucs['generados']:<15} | {res_voraz['gen
 print(f"{'Frontera Máxima':<22} | {res_ucs['max_frontera']:<15} | {res_voraz['max_frontera']:<15} | {res_a_star['max_frontera']:<15}")
 print(f"{'Reaperturas':<22} | {res_ucs['reaperturas']:<15} | {res_voraz['reaperturas']:<15} | {res_a_star['reaperturas']:<15}")
 print("="*75)
+
+
+# ==============================================================================
+# SECCIÓN 5: RESPUESTAS DE ANÁLISIS
+# ==============================================================================
+
+print("\nRESPUESTAS DE ANÁLISIS")
+print("1. Voraz y A* coinciden porque, desde S, la heurística prioriza A sobre B "
+    "(5 < 7) y, desde A, prioriza C sobre D (3 < 6). Además, los costos y "
+    "la heurística de este grafo hacen que A* mantenga f=7 en el camino "
+    "óptimo; h es admisible y consistente en las aristas de este ejemplo. "
+    "La admisibilidad por sí sola no garantiza que voraz sea óptimo.")
+print("2. No. Voraz prioriza únicamente h(n), que estima lo que falta y no "
+    "incluye el costo g(n) ya pagado. Puede elegir un estado aparentemente "
+    "cercano al objetivo pero situado al final de un camino caro, por lo que "
+    "no garantiza el menor costo.")
+print("3. Si h=0 para todos los estados, la prioridad de A* queda f=g+0=g. "
+    "Por lo tanto, A* coincide con UCS (búsqueda de costo uniforme).")
+print("4. No hubo reaperturas en ninguno de los tres algoritmos: una reapertura "
+    "exige mejorar el costo de un estado después de que ya fue expandido. "
+    "En UCS, D sí fue descubierto con g=7 y luego mejorado a g=4 antes de "
+    "expandirse; eso es una actualización de frontera, no una reapertura. "
+    "La entrada vieja se descarta como obsoleta.")
+print("5. No. Expandir menos estados mide esfuerzo de búsqueda, no costo de la "
+    "solución. Aquí voraz expande 3 estados antes de G y obtiene costo 7, "
+    "mientras UCS expande 5 y garantiza el menor costo; en otro grafo voraz "
+    "podría expandir menos y devolver un camino más caro.")
