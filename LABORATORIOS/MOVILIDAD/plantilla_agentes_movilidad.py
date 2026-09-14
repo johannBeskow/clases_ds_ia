@@ -5,33 +5,39 @@ Complete las funciones marcadas con TODO sin consultar datos de h+1.
 
 from __future__ import annotations
 
+import math
+from numbers import Real
 from typing import Any
 
 import pandas as pd
-
-import math
 
 
 ACCIONES = {"NO_REFORZAR", "RECOMENDAR_REFUERZO", "ABSTENERSE"}
 UMBRAL_PRESION = 0.85
 
 
-def decidir_reactivo_simple(percepcion: dict[str, Any]) -> tuple[str, str]:
-    """Devuelve (accion, motivo) usando solo la percepcion actual."""
-    # TODO: validar la percepción y aplicar las reglas de la consigna.
+def _percepcion_valida(percepcion: dict[str, Any]) -> bool:
     presion = percepcion.get("presion")
     capacidad = percepcion.get("capacidad_x")
-    # Dato faltante
-    if presion is None or capacidad is None:
-        return ("ABSTENERSE", "Faltan datos requeridos")
-    # NaN o infinito
-    if math.isnan(presion) or math.isinf(presion):
-        return ("ABSTENERSE", f"Presión inválida: {presion}")
-    # Valor sin sentido físico
-    if presion < 0:
-        return ("ABSTENERSE", f"Presión negativa: {presion}")
-    if capacidad <= 0:
-        return ("ABSTENERSE", f"Capacidad inválida: {capacidad}")
+    if (
+        isinstance(presion, bool)
+        or not isinstance(presion, Real)
+        or not math.isfinite(float(presion))
+        or presion < 0
+        or isinstance(capacidad, bool)
+        or not isinstance(capacidad, Real)
+        or not math.isfinite(float(capacidad))
+        or capacidad <= 0
+    ):
+        return False
+    return True
+
+
+def decidir_reactivo_simple(percepcion: dict[str, Any]) -> tuple[str, str]:
+    """Devuelve (accion, motivo) usando solo la percepcion actual."""
+    presion = percepcion.get("presion")
+    if not _percepcion_valida(percepcion):
+        return ("ABSTENERSE", "Percepción inválida o datos no confiables")
     # Reglas normales
     if presion >= UMBRAL_PRESION:
         return ("RECOMENDAR_REFUERZO", f"Presión {presion:.2f} >= {UMBRAL_PRESION}")
@@ -59,14 +65,7 @@ def actualizar_estado(
     hora = percepcion.get("hora")
 
     # 1. Validar la percepción
-    if (
-        presion is None
-        or capacidad is None
-        or math.isnan(presion)
-        or math.isinf(presion)
-        or presion < 0
-        or capacidad <= 0
-    ):
+    if not _percepcion_valida(percepcion):
         return {
             "percepcion_valida": False,
             "racha_presion_alta": 0,
